@@ -1,0 +1,324 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  phone         String?
+  passwordHash  String
+  role          String         @default("CLIENT") // "SUPER_ADMIN", "CLIENT_ADMIN", "TEAM_MEMBER", "CLIENT"
+  avatar        String?
+  isActive      Boolean        @default(true)
+  otpCode       String?
+  otpExpiresAt  DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  teamProfile   TeamMember?
+  clientProfile Client?
+  assignedCases CaseAssignee[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+}
+
+model TeamMember {
+  id              String      @id @default(cuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  designation     String
+  sanadNumber     String?
+  specialization  String?
+  experienceYears Int         @default(3)
+  bio             String?
+  isPublic        Boolean     @default(true)
+  order           Int         @default(0)
+}
+
+model Client {
+  id             String      @id @default(cuid())
+  userId         String      @unique
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientCode     String      @unique
+  companyName    String?
+  address        String
+  city           String      @default("Pune")
+  state          String      @default("Maharashtra")
+  pinCode        String?
+  panNumber      String?
+  aadhaarMasked  String?
+  emergencyPhone String?
+  notes          String?
+  cases          Case[]
+  invoices       Invoice[]
+  createdAt      DateTime    @default(now())
+}
+
+model Case {
+  id              String         @id @default(cuid())
+  caseNumber      String         @unique
+  casingTitle     String
+  practiceArea    String         // "CIVIL_AND_FAMILY", "REVENUE", "CONSUMER", "CRIMINAL", "MACT"
+  courtName       String
+  judgeName       String?
+  jurisdiction    String         @default("State of Maharashtra")
+  filingDate      DateTime
+  status          String         @default("ACTIVE") // "ACTIVE", "HEARING_SCHEDULED", "JUDGMENT_RESERVED", "COMPLETED", "ON_HOLD", "APPEALED"
+  stage           String
+  summary         String
+  internalNotes   String?
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id])
+  nextHearingDate DateTime?
+
+  assignees       CaseAssignee[]
+  hearings        Hearing[]
+  documents       Document[]
+  invoices        Invoice[]
+  timelineEvents  CaseTimeline[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model CaseAssignee {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleInCase String   @default("Lead Counsel")
+  assignedAt DateTime @default(now())
+
+  @@unique([caseId, userId])
+}
+
+model Hearing {
+  id             String    @id @default(cuid())
+  caseId         String
+  case           Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  hearingDate    DateTime
+  courtRoom      String?
+  purpose        String
+  summaryOutcome String?
+  nextSteps      String?
+  isCompleted    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+}
+
+model Document {
+  id              String    @id @default(cuid())
+  caseId          String
+  case            Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  title           String
+  category        String    @default("OTHER") // "PETITION", "WRITTEN_STATEMENT", "EVIDENCE", "INTERIM_ORDER", "FINAL_JUDGMENT", "LEGAL_NOTICE", "VAKALATNAMA", "OTHER"
+  fileName        String
+  fileSize        Int
+  mimeType        String    @default("application/pdf")
+  filePath        String
+  version         Int       @default(1)
+  uploadedBy      String
+  verificationId  String?   @unique
+  qrCodeUrl       String?
+  isVerified      Boolean   @default(true)
+  verifiedAt      DateTime?
+  digitalSealHash String?
+  createdAt       DateTime  @default(now())
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  caseId        String?
+  case          Case?         @relation(fields: [caseId], references: [id])
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime
+  subtotal      Float
+  taxPercent    Float         @default(18.0)
+  taxAmount     Float
+  totalAmount   Float
+  paidAmount    Float         @default(0.0)
+  status        String        @default("ISSUED") // "DRAFT", "ISSUED", "PAID", "PARTIALLY_PAID", "OVERDUE", "CANCELLED"
+  notes         String?
+  items         InvoiceItem[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  amount      Float
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount         Float
+  paymentDate    DateTime @default(now())
+  paymentMethod  String   // "NEFT/RTGS", "UPI", "Cheque", "Online"
+  transactionRef String?
+  notes          String?
+}
+
+model CaseTimeline {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  eventDate   DateTime
+  eventType   String
+  createdAt   DateTime @default(now())
+}
+
+model AppointmentSlot {
+  id           String    @id @default(cuid())
+  date         DateTime
+  startTime    String
+  endTime      String
+  isBooked     Boolean   @default(false)
+  clientName   String?
+  clientEmail  String?
+  clientPhone  String?
+  practiceArea String?
+  mode         String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+}
+
+model ContactInquiry {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  phone        String
+  subject      String
+  practiceArea String?
+  message      String
+  status       String   @default("NEW")
+  createdAt    DateTime @default(now())
+}
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  content     String
+  category    String
+  authorName  String   @default("Adv. Amit S. Rathi")
+  readTime    String   @default("5 min read")
+  publishedAt DateTime @default(now())
+  imageUrl    String
+}
+
+model Testimonial {
+  id           String   @id @default(cuid())
+  clientName   String
+  clientRole   String
+  practiceArea String
+  feedback     String
+  rating       Int      @default(5)
+  caseYear     String   @default("2023")
+}
+
+model CaseResult {
+  id           String   @id @default(cuid())
+  title        String
+  forum        String
+  practiceArea String
+  summary      String
+  outcome      String
+  year         String
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Reminder {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  category    String    @default("HEARING") // "HEARING", "FILING_DEADLINE", "CASE_FOLLOW_UP", "CLIENT_FOLLOW_UP", "DOCUMENT_SUBMISSION", "PAYMENT", "TASK", "PERSONAL"
+  caseId      String?
+  clientId    String?
+  assignedTo  String    @default("Adv. Amit S. Rathi")
+  dueDate     DateTime
+  dueTime     String?
+  priority    String    @default("NORMAL") // "LOW", "NORMAL", "HIGH", "URGENT"
+  status      String    @default("PENDING") // "PENDING", "COMPLETED", "SNOOZED", "OVERDUE"
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  snoozeUntil DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  caseId      String?
+  assignedTo  String    @default("Adv. Amit S. Rathi")
+  priority    String    @default("NORMAL") // "LOW", "NORMAL", "HIGH", "URGENT"
+  status      String    @default("PENDING") // "NOT_STARTED", "PENDING", "IN_PROGRESS", "COMPLETED"
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  title         String
+  category      String   // "COURT_FEES", "FILING_FEES", "TRAVEL", "PRINTING", "OFFICE_EXPENSES", "MISCELLANEOUS"
+  amount        Float
+  expenseDate   DateTime @default(now())
+  caseId        String?
+  paidTo        String?
+  paymentMethod String   @default("CASH") // "CASH", "UPI", "BANK_TRANSFER", "CHEQUE"
+  description   String?
+  recordedBy    String   @default("Accounts Desk")
+  createdAt     DateTime @default(now())
+}
+
+model ConflictCheck {
+  id               String   @id @default(cuid())
+  searchQuery      String
+  category         String   @default("OPPOSITE_PARTY") // "OPPOSITE_PARTY", "CLIENT_NAME", "RELATED_ENTITY"
+  potentialMatches Int      @default(0)
+  matchSummary     String?
+  status           String   @default("CLEARED") // "CLEARED", "POTENTIAL_CONFLICT", "UNDER_REVIEW"
+  reviewedBy       String   @default("Adv. Amit S. Rathi")
+  notes            String?
+  createdAt        DateTime @default(now())
+}
+
